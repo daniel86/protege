@@ -12,8 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -24,7 +26,7 @@ import java.util.concurrent.FutureTask;
  * The University Of Manchester<br>
  * Medical Informatics Group<br>
  * Date: 31-Aug-2006<br><br>
-
+ * <p>
  * matthew.horridge@cs.man.ac.uk<br>
  * www.cs.man.ac.uk/~horridgm<br><br>
  */
@@ -45,13 +47,46 @@ public class MissingImportHandlerUI implements MissingImportHandler {
             int ret = JOptionPane.showConfirmDialog(null,
                     "<html><body>The system couldn't locate the ontology:<br><font color=\"blue\">" + ontologyIRI.toString() + "</font><br><br>" +
 
-                            "Would you like to attempt to resolve the missing import?</body></html>",
+                            "Would you like to attempt to resolve the missing import? I will try and " +
+                            "infer the path automatically if it is a ros package, but beware, " +
+                            "it may return a banana. If it doesn't work " +
+                            "nothing will happen, then you have to do it old style, searching and clicking. SAD.</body></html>",
                     "Resolve missing import?",
                     JOptionPane.YES_NO_OPTION,
                     JOptionPane.WARNING_MESSAGE);
-            if (ret != JOptionPane.YES_OPTION) {
-                return null;
+
+            // if it starts with the package prefix then we try to infer it directly, it's probably ros.
+            if (ontologyIRI.toString().startsWith("package://")) {
+                BufferedReader b = null;
+                try {
+                    //  let's play around with strings till I get what I want.
+                    String givenUri = ontologyIRI.toString();
+                    givenUri = givenUri.replaceFirst("package://", "");
+                    int firstSlash = givenUri.indexOf("/");
+                    String packageName = givenUri.substring(0, firstSlash);
+                    String filePath = givenUri.substring(firstSlash);
+
+                    // now it is time for a system call.
+                    Runtime r = Runtime.getRuntime();
+                    Process p = r.exec("rospack find " + packageName);
+                    p.waitFor();
+                    b = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                    String packagePath = "";
+                    if ((packagePath = b.readLine()) != null) {
+                        File banana = new File(packagePath + filePath);
+                        return IRI.create(banana);
+                    }
+                } catch (Exception e) {
+                    // I am sad... it didn't work, so let's do it the old way.
+                } finally {
+                    if(b != null)
+                        b.close();
+                }
             }
+
+            if(ret != JOptionPane.YES_OPTION)
+                return null;
+
             UIHelper helper = new UIHelper(owlEditorKit);
             File file = helper.chooseOWLFile("Please select an ontology file");
             if (file == null) {
@@ -72,7 +107,7 @@ public class MissingImportHandlerUI implements MissingImportHandler {
             return null;
         }
     }
-    
+
     private void updateActiveCatalog(IRI ontologyIRI, File file) {
         OntologyCatalogManager catalogManager = owlEditorKit.getOWLModelManager().getOntologyCatalogManager();
         XMLCatalog activeCatalog = catalogManager.getActiveCatalog();
@@ -84,8 +119,7 @@ public class MissingImportHandlerUI implements MissingImportHandler {
         File catalogLocation = new File(activeCatalog.getXmlBaseContext().getXmlBase());
         try {
             CatalogUtilities.save(activeCatalog, catalogLocation);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             logger.error("Could not save user supplied import redirection to catalog.", e);
         }
     }
