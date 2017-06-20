@@ -45,44 +45,13 @@ public class MissingImportHandlerUI implements MissingImportHandler {
     public IRI getDocumentIRI(IRI ontologyIRI) {
         FutureTask<IRI> futureTask = new FutureTask<>(() -> {
             int ret = JOptionPane.showConfirmDialog(null,
-                    "<html><body>The system couldn't locate the ontology:<br><font color=\"blue\">" + ontologyIRI.toString() + "</font><br><br>" +
-
-                            "Would you like to attempt to resolve the missing import? I will try and " +
-                            "infer the path automatically if it is a ros package, but beware, " +
-                            "it may return a banana. If it doesn't work " +
-                            "nothing will happen, then you have to do it old style, searching and clicking. SAD.</body></html>",
+                    "<html><body>The system couldn't locate the ontology:<br><font color=\"blue\">" +
+                            ontologyIRI.toString() + "</font><br><br>" +
+                            "Even ROS Packages were not found. SAD!" +
+                            "<br>Would you like to attempt to resolve the missing import?</body></html>",
                     "Resolve missing import?",
                     JOptionPane.YES_NO_OPTION,
                     JOptionPane.WARNING_MESSAGE);
-
-            // if it starts with the package prefix then we try to infer it directly, it's probably ros.
-            if (ontologyIRI.toString().startsWith("package://")) {
-                BufferedReader b = null;
-                try {
-                    //  let's play around with strings till I get what I want.
-                    String givenUri = ontologyIRI.toString();
-                    givenUri = givenUri.replaceFirst("package://", "");
-                    int firstSlash = givenUri.indexOf("/");
-                    String packageName = givenUri.substring(0, firstSlash);
-                    String filePath = givenUri.substring(firstSlash);
-
-                    // now it is time for a system call.
-                    Runtime r = Runtime.getRuntime();
-                    Process p = r.exec("rospack find " + packageName);
-                    p.waitFor();
-                    b = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                    String packagePath = "";
-                    if ((packagePath = b.readLine()) != null) {
-                        File banana = new File(packagePath + filePath);
-                        return IRI.create(banana);
-                    }
-                } catch (Exception e) {
-                    // I am sad... it didn't work, so let's do it the old way.
-                } finally {
-                    if(b != null)
-                        b.close();
-                }
-            }
 
             if(ret != JOptionPane.YES_OPTION)
                 return null;
