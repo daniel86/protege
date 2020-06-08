@@ -1,15 +1,15 @@
 package org.protege.editor.core.ui.list;
 
 import org.protege.editor.core.ui.util.UIUtil;
+import org.protege.editor.core.ui.util.MousePositionCache;
 
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.*;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Author: Matthew Horridge<br>
@@ -79,7 +79,10 @@ public class MList extends JList {
 
     public int lastMousePositionCellIndex = -1;
 
-    
+    private final MousePositionCache mousePositionCache;
+
+    private final DefaultListModel model = new DefaultListModel();
+
     public MList() {
         ListCellRenderer renderer = this.getCellRenderer();
         this.ren = new MListCellRenderer();
@@ -92,6 +95,7 @@ public class MList extends JList {
                 handleMouseMoved();
             }
         };
+        mousePositionCache = MousePositionCache.createAndInstall(this, super::getMousePosition);
         this.addMouseMotionListener(mouseMovementListener);
         MouseListener mouseButtonListener = new MouseAdapter() {
             @Override
@@ -112,6 +116,9 @@ public class MList extends JList {
             }
         };
         this.addMouseListener(mouseButtonListener);
+        addListSelectionListener(e -> {
+            model.set(e.getFirstIndex(), model.getElementAt(e.getFirstIndex()));
+        });
         attachedListenersForCacheResetting();
     }
 
@@ -138,6 +145,14 @@ public class MList extends JList {
         });
     }
 
+    @Override
+    public void setListData(Object[] listData) {
+        setModel(new DefaultListModel());
+        model.clear();
+        Stream.of(listData).forEach(o -> model.add(model.size(), o));
+        setModel(model);
+    }
+
     /**
      * The ListUI caches cell heights.  Setting a fixed height and then clearing the fixed height resets this cache.
      */
@@ -154,7 +169,7 @@ public class MList extends JList {
         	    if (dirty != null) {        	    	  
         	    	   repaint(dirty);
         	    }
-            Point pt = MList.this.getMousePosition();            
+            Point pt = getMousePosition();
             if (pt != null) {
                 lastMousePositionCellIndex = MList.this.locationToIndex(pt);
             }
@@ -387,7 +402,7 @@ public class MList extends JList {
 
     @Override
     public String getToolTipText(MouseEvent event) {
-        Point mousePos = this.getMousePosition();
+        Point mousePos = getMousePosition();
         if (mousePos == null) {
             return null;
         }
@@ -491,7 +506,7 @@ public class MList extends JList {
     }
 
     private Color getButtonColor(MListButton button) {
-        Point pt = this.getMousePosition();
+        Point pt = getMousePosition();
         if (pt == null) {
             return button.getBackground();
         }
@@ -506,4 +521,8 @@ public class MList extends JList {
         return button.getBackground();
     }
 
+    @Override
+    public Point getMousePosition() throws HeadlessException {
+        return mousePositionCache.getMousePosition();
+    }
 }

@@ -47,13 +47,16 @@ public class OntologyImportsItemRenderer extends PageCellRenderer {
             OntologyIRIShortFormProvider sfp = new OntologyIRIShortFormProvider();
             Color declIRIColor = sel ? fg : Color.BLACK;
             IRI iri = item.getImportDeclaration().getIRI();
-            page.addParagraph(iri.toQuotedString(), declIRIColor);
+            page.addParagraph(iri.toQuotedString(), declIRIColor).setBold(true);
             page.setMarginBottom(5);
             if (ont != null) {
                 String shortForm = sfp.getShortForm(ont);
+                int axiomsCount = ont.getAxiomCount();
+                int logicalAxiomsCount = ont.getLogicalAxiomCount();
                 Paragraph ontPara = page.addParagraph(shortForm, declIRIColor);
                 ontPara.setMarginTop(5);
                 ontPara.setMarginLeft(40);
+                ontPara.append(String.format("    (%,d axioms, %,d logical axioms)", axiomsCount, logicalAxiomsCount), foreground);
                 OWLOntologyID ontologyID = ont.getOntologyID();
                 if (!ontologyID.isAnonymous()) {
                     Paragraph ontologyIriPara = page.addParagraph("Ontology IRI: ", Color.GRAY);

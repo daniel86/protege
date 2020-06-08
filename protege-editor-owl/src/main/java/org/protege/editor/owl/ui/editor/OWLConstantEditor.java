@@ -6,20 +6,23 @@
 
 package org.protege.editor.owl.ui.editor;
 
+import org.protege.editor.core.ui.util.FormLabel;
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.model.classexpression.OWLExpressionParserException;
+import org.protege.editor.owl.model.lang.LangCode;
+import org.protege.editor.owl.model.lang.LangCodeRegistry;
 import org.protege.editor.owl.model.parser.OWLLiteralParser;
 import org.protege.editor.owl.model.util.LiteralChecker;
 import org.protege.editor.owl.ui.UIHelper;
 import org.protege.editor.owl.ui.clsdescriptioneditor.OWLAutoCompleter;
 import org.protege.editor.owl.ui.clsdescriptioneditor.OWLExpressionChecker;
+import org.protege.editor.owl.ui.lang.LangTagEditor;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLDatatype;
 import org.semanticweb.owlapi.model.OWLLiteral;
 import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -28,6 +31,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Author: Matthew Horridge<br>
@@ -39,21 +44,19 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
 
     private final OWLEditorKit editorKit;
 
-    private final JTextArea annotationContent = new JTextArea(8, 40);
+    private final JTextArea lexicalValueField = new JTextArea(8, 40);
 
-    private final JComboBox<String> langComboBox;
+    private final LangTagEditor langTagField;
 
-    private final JComboBox<OWLDatatype> datatypeComboBox;
-
-    private final JLabel langLabel = new JLabel("Lang");
+    private final JComboBox<OWLDatatype> datatypeField;
 
     private final OWLDataFactory dataFactory;
 
-    private String lastLanguage;
-
     private OWLDatatype lastDatatype;
 
+    private OWLDatatype overridingDatatype;
 
+    private LangCodeRegistry langCodeRegistry = LangCodeRegistry.get();
 
     private final JLabel messageLabel = new JLabel();
 
@@ -61,30 +64,25 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
     public OWLConstantEditor(OWLEditorKit owlEditorKit) {
         this.editorKit = owlEditorKit;
         dataFactory = owlEditorKit.getModelManager().getOWLDataFactory();
-        annotationContent.setWrapStyleWord(true);
-        annotationContent.setLineWrap(true);
-        annotationContent.setBorder(null);
+        lexicalValueField.setWrapStyleWord(true);
+        lexicalValueField.setLineWrap(true);
+        lexicalValueField.setBorder(null);
 
         final UIHelper uiHelper = new UIHelper(owlEditorKit);
-        langComboBox = uiHelper.getLanguageSelector();
+        langTagField = new LangTagEditor(LangCodeRegistry.get());
+        langTagField.setChangeListener(e -> handleLangTagChanged());
+        datatypeField = uiHelper.getDatatypeSelector();
+        datatypeField.addActionListener(e -> validateContent());
 
-        datatypeComboBox = uiHelper.getDatatypeSelector();
-        datatypeComboBox.addActionListener(e -> {
-            OWLDatatype owlDatatype = getSelectedDatatype();
-            boolean langEnabled = owlDatatype == null || owlDatatype.isRDFPlainLiteral();
-            validateContent();
-            setLangEnabled(langEnabled);
-        });
-
-        annotationContent.getDocument().addDocumentListener(new DocumentListener() {
+        lexicalValueField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
-                validateContent();
+                handleLexicalValueChanged();
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
-                validateContent();
+                handleLexicalValueChanged();
             }
 
             @Override
@@ -95,15 +93,58 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
 
         addHierarchyListener(e -> {
             if(isShowing()) {
-                annotationContent.requestFocus();
+                lexicalValueField.requestFocus();
             }
         });
 
-        removeNonSelectableDatatypes(datatypeComboBox);
+        removeNonSelectableDatatypes(datatypeField);
 
         setupAutoCompleter(owlEditorKit);
         layoutComponents();
     }
+
+    public void setOverridingDatatype(@Nonnull OWLDatatype overridingDatatype) {
+        this.overridingDatatype = checkNotNull(overridingDatatype);
+        updateDatatype();
+    }
+
+    public void clearOverridingDatatype() {
+        this.overridingDatatype = null;
+        this.datatypeField.setSelectedItem(null);
+        updateDatatype();
+    }
+
+    private void handleLangTagChanged() {
+        updateDatatype();
+    }
+
+    private void handleLexicalValueChanged() {
+        updateDatatype();
+    }
+
+    private void updateDatatype() {
+        if(overridingDatatype != null) {
+            datatypeField.setSelectedItem(overridingDatatype);
+            langTagField.clear();
+        }
+        else if(isLangSelected()) {
+            datatypeField.setSelectedItem(null);
+        }
+        else {
+            OWLDatatype selDatatype = (OWLDatatype) datatypeField.getSelectedItem();
+            if(isBuiltInParseableDatatpe(selDatatype) || selDatatype == null) {
+                OWLLiteralParser parser = new OWLLiteralParser(dataFactory);
+                OWLLiteral parsedLiteral = parser.parseLiteral(lexicalValueField.getText().trim());
+                datatypeField.setSelectedItem(parsedLiteral.getDatatype());
+            }
+        }
+        validateContent();
+    }
+
+    private boolean isBuiltInParseableDatatpe(OWLDatatype selDatatype) {
+        return selDatatype != null && (selDatatype.isString() || selDatatype.isInteger() || selDatatype.isBoolean() || selDatatype.isFloat());
+    }
+
 
     private void validateContent() {
         clearErrorMessage();
@@ -113,7 +154,7 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
         Optional<OWLDatatype> datatype = Optional.ofNullable(getSelectedDatatype());
         datatype.ifPresent(d -> {
             if(!LiteralChecker.isLiteralIsInLexicalSpace(getEditedObject())) {
-                    annotationContent.setForeground(Color.RED);
+                    lexicalValueField.setForeground(Color.RED);
                 String message = String.format(
                         "The entered value is not valid for the specified datatype (%s)",
                         editorKit.getOWLModelManager().getRendering(d));
@@ -125,14 +166,14 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
     private void displayErrorMessage(String message) {
         messageLabel.setText(message);
         messageLabel.setForeground(Color.RED);
-        annotationContent.setToolTipText(message);
+        lexicalValueField.setToolTipText(message);
     }
 
     private void clearErrorMessage() {
         messageLabel.setText("");
         messageLabel.setForeground(null);
-        annotationContent.setToolTipText(null);
-        annotationContent.setForeground(null);
+        lexicalValueField.setToolTipText(null);
+        lexicalValueField.setForeground(null);
     }
 
     /**
@@ -154,16 +195,7 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
         }
     }
 
-    private void setLangEnabled(boolean b) {
-        langLabel.setEnabled(b);
-        langComboBox.setEnabled(b);
-    }
-
     public boolean canEdit(Object object) {
-        return object instanceof OWLLiteral;
-    }
-
-    public boolean isPreferred(Object object) {
         return object instanceof OWLLiteral;
     }
 
@@ -172,18 +204,28 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
         return this;
     }
 
-    @Nullable
+    @Nonnull
     public OWLLiteral getEditedObject() {
         lastDatatype = null;
-        lastLanguage = null;
         String value = getLexicalValue();
+        // Specifying a language tag overrides the datatype
         if (isLangSelected()) {
-            lastLanguage = getSelectedLang();
-            return dataFactory.getOWLLiteral(value, getSelectedLang());
+            return dataFactory.getOWLLiteral(value, getSelectedLang().map(LangCode::getLangCode).orElse(null));
         }
         if (isDatatypeSelected()) {
             lastDatatype = getSelectedDatatype();
-            return dataFactory.getOWLLiteral(value, getSelectedDatatype());
+            if(lastDatatype.isBoolean()) {
+                if(OWL2Datatype.XSD_BOOLEAN.getPattern().matcher(value).matches()) {
+                    dataFactory.getOWLLiteral(value, OWL2Datatype.XSD_BOOLEAN);
+                }
+                else {
+                    dataFactory.getOWLLiteral(value, OWL2Datatype.XSD_STRING);
+                }
+            }
+            else {
+                return dataFactory.getOWLLiteral(value, getSelectedDatatype());
+            }
+
         }
 
         OWLLiteralParser parser = new OWLLiteralParser(dataFactory);
@@ -192,22 +234,25 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
     }
 
     private String getLexicalValue() {
-        return annotationContent.getText().trim();
+        return lexicalValueField.getText().trim();
     }
 
     public Set<OWLLiteral> getEditedObjects() {
         return Collections.singleton(getEditedObject());
     }
 
-    public boolean setEditedObject(OWLLiteral constant) {
+    public boolean setEditedObject(OWLLiteral literal) {
         clear();
-        if (constant != null) {
-            annotationContent.setText(constant.getLiteral());
-            if (!constant.isRDFPlainLiteral()) {
-                datatypeComboBox.setSelectedItem(constant.getDatatype());
-            } else {
-                langComboBox.setSelectedItem(constant.getLang());
-            }
+        if(literal == null) {
+            return true;
+        }
+        lexicalValueField.setText(literal.getLiteral());
+        if(literal.isRDFPlainLiteral()) {
+            langCodeRegistry.getLangCode(literal.getLang()).ifPresent(langTagField::setLangCode);
+            datatypeField.setSelectedItem(null);
+        }
+        else {
+            datatypeField.setSelectedItem(literal.getDatatype());
         }
         return true;
     }
@@ -222,21 +267,21 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
     }
 
     public void clear() {
-        annotationContent.setText("");
-        datatypeComboBox.setSelectedItem(lastDatatype);
-        langComboBox.setSelectedItem(lastLanguage);
+        lexicalValueField.setText("");
+        datatypeField.setSelectedItem(lastDatatype);
+        langTagField.clear();
     }
 
     private boolean isLangSelected() {
-        return langComboBox.getSelectedItem() != null && !langComboBox.getSelectedItem().equals("");
+        return langTagField.getLangCode().isPresent();
     }
 
     private boolean isDatatypeSelected() {
-        return datatypeComboBox.getSelectedItem() != null;
+        return datatypeField.getSelectedItem() != null;
     }
 
-    private String getSelectedLang() {
-        return (String) langComboBox.getSelectedItem();
+    private Optional<LangCode> getSelectedLang() {
+        return langTagField.getLangCode();
     }
 
     /**
@@ -246,17 +291,16 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
      * if no datatype is selected.
      */
     private OWLDatatype getSelectedDatatype() {
-        return (OWLDatatype) datatypeComboBox.getSelectedItem();
+        return (OWLDatatype) datatypeField.getSelectedItem();
     }
 
     private void setupAutoCompleter(OWLEditorKit owlEditorKit) {
-        new OWLAutoCompleter(owlEditorKit, annotationContent, new OWLExpressionChecker() {
+        new OWLAutoCompleter(owlEditorKit, lexicalValueField, new OWLExpressionChecker() {
             public void check(String text) throws OWLExpressionParserException {
                 throw new OWLExpressionParserException(text, 0, text.length(), true, true, true, true, true, true, new HashSet<>());
             }
 
-            public Object createObject(String text)
-                    throws OWLExpressionParserException {
+            public Object createObject(String text) {
                 return null;
             }
         });
@@ -264,86 +308,94 @@ public class OWLConstantEditor extends JPanel implements OWLObjectEditor<OWLLite
 
     private void layoutComponents() {
         setLayout(new GridBagLayout());
+        Insets formLabelInsets = new Insets(7, 0, 0, 0);
 
-        add(new JScrollPane(annotationContent),
-                new GridBagConstraints(1,
+        add(new FormLabel("Value"),
+            new GridBagConstraints(1, 0,
+                                   1,
+                                   1,
+                                   0.0,
+                                   0.0,
+                                   GridBagConstraints.BASELINE_LEADING,
+                                   GridBagConstraints.NONE,
+                                   formLabelInsets,
+                                   0, 0
+            ));
+
+        add(new JScrollPane(lexicalValueField),
+                new GridBagConstraints(1, 1,
                         1,
-                        5,
                         1,
                         100.0,
                         100.0,
                         GridBagConstraints.NORTHWEST,
                         GridBagConstraints.BOTH,
-                        new Insets(7, 7, 7, 7),
+                        new Insets(0, 0, 0, 0),
                         0,
                         0));
 
         add(messageLabel,
-                new GridBagConstraints(1,
-                        0,
-                        5,
-                        1,
-                        0.0,
-                        0.0,
-                        GridBagConstraints.NORTHWEST,
-                        GridBagConstraints.NONE,
-                        new Insets(7, 7, 0, 7),
-                        0,
-                        0));
+            new GridBagConstraints(1, 2,
+                                   1,
+                                   1,
+                                   0.0,
+                                   0.0,
+                                   GridBagConstraints.NORTHWEST,
+                                   GridBagConstraints.NONE,
+                                   new Insets(0, 0, 0, 0),
+                                   0,
+                                   0));
 
-        add(new JLabel("Type"),
-                new GridBagConstraints(1,
-                        3,
-                        1,
-                        1,
-                        0.0,
-                        0.0,
-                        GridBagConstraints.WEST,
-                        GridBagConstraints.NONE,
-                        new Insets(0, 7, 0, 7),
-                        0,
-                        0));
+        add(new FormLabel("Language Tag"),
+            new GridBagConstraints(1, 3,
+                                   1,
+                                   1,
+                                   0.0,
+                                   0.0,
+                                   GridBagConstraints.BASELINE_LEADING,
+                                   GridBagConstraints.NONE,
+                                   formLabelInsets,
+                                   0,
+                                   0));
 
+        add(langTagField,
+            new GridBagConstraints(1, 4,
+                                   1,
+                                   1,
+                                   100.0,
+                                   0.0,
+                                   GridBagConstraints.BASELINE_LEADING,
+                                   GridBagConstraints.HORIZONTAL,
+                                   new Insets(0, 0, 0, 0),
+                                   40,
+                                   0));
 
-        add(datatypeComboBox,
-                new GridBagConstraints(2,
-                        3,
+        add(new FormLabel("Datatype"),
+                new GridBagConstraints(1, 5,
                         1,
                         1,
                         0.0,
                         0.0,
-                        GridBagConstraints.WEST,
+                        GridBagConstraints.BASELINE_LEADING,
                         GridBagConstraints.NONE,
-                        new Insets(5, 5, 5, 5),
-                        40,
-                        0));
-
-        add(langLabel,
-                new GridBagConstraints(3,
-                        3,
-                        1,
-                        1,
-                        0.0,
-                        0.0,
-                        GridBagConstraints.WEST,
-                        GridBagConstraints.NONE,
-                        new Insets(0, 20, 0, 0),
+                        formLabelInsets,
                         0,
                         0));
-        langLabel.setEnabled(true);
 
-        add(langComboBox,
-                new GridBagConstraints(4,
-                        3,
+
+        add(datatypeField,
+            new GridBagConstraints(1, 6,
                         1,
                         1,
                         100.0,
                         0.0,
-                        GridBagConstraints.WEST,
-                        GridBagConstraints.NONE,
-                        new Insets(5, 5, 5, 5),
+                        GridBagConstraints.BASELINE,
+                        GridBagConstraints.HORIZONTAL,
+                        new Insets(0, 0, 0, 0),
                         40,
                         0));
+
+
     }
 
     public void dispose() {

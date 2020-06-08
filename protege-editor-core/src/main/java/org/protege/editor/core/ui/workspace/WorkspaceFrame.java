@@ -7,6 +7,7 @@ import org.protege.editor.core.prefs.PreferencesManager;
 import org.protege.editor.core.ui.action.ProtegeAction;
 import org.protege.editor.core.ui.menu.MenuBuilder;
 import org.protege.editor.core.ui.util.Icons;
+import org.protege.editor.core.ui.util.UIUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -30,11 +31,13 @@ import java.util.Set;
  */
 public class WorkspaceFrame extends JFrame {
 
-    private static final long serialVersionUID = -8568184212386766789L;
-
     public static final int DEFAULT_WIDTH = 1024;
 
     public static final int DEFAULT_HEIGHT = 768;
+
+    private static final int MINIMUM_WIDTH = 400;
+
+    private static final int MINIMUM_HEIGHT = 300;
 
     private Workspace workspace;
 
@@ -88,15 +91,26 @@ public class WorkspaceFrame extends JFrame {
 
 
     protected void restoreMetrics() {
-        Preferences p = PreferencesManager.getInstance().getApplicationPreferences(getClass().getName());
-        int w = p.getInt(SIZE_X, DEFAULT_WIDTH);
-        int h = p.getInt(SIZE_Y, DEFAULT_HEIGHT);
+        Preferences prefs = PreferencesManager.getInstance().getApplicationPreferences(getClass().getName());
+        int w = prefs.getInt(SIZE_X, DEFAULT_WIDTH);
+        int h = prefs.getInt(SIZE_Y, DEFAULT_HEIGHT);
+        if(w < MINIMUM_WIDTH) {
+            w = MINIMUM_WIDTH;
+        }
+        if(h < MINIMUM_HEIGHT) {
+            h = MINIMUM_HEIGHT;
+        }
         setSize(w, h);
         Point defLoc = getDefaultLocation();
-        int x = p.getInt(LOC_X, defLoc.x);
-        int y = p.getInt(LOC_Y, defLoc.y);
-        setLocation(x, y);
-        setSize(w, h);
+        int x = prefs.getInt(LOC_X, defLoc.x);
+        int y = prefs.getInt(LOC_Y, defLoc.y);
+        Rectangle desiredRectangle = new Rectangle(x, y, w, h);
+        if(UIUtil.isVisibleOnScreen(desiredRectangle)) {
+            setLocation(x, y);
+        }
+        else {
+            setLocation(defLoc.x, defLoc.y);
+        }
     }
 
 
@@ -108,11 +122,12 @@ public class WorkspaceFrame extends JFrame {
 
 
     protected void saveMetrics() {
-        Preferences p = PreferencesManager.getInstance().getApplicationPreferences(getClass().getName());
-        p.putInt(LOC_X, getLocation().x);
-        p.putInt(LOC_Y, getLocation().y);
-        p.putInt(SIZE_X, getSize().width);
-        p.putInt(SIZE_Y, getSize().height);
+        Preferences prefs = PreferencesManager.getInstance().getApplicationPreferences(getClass().getName());
+        Point location = getLocation();
+        prefs.putInt(LOC_X, location.x);
+        prefs.putInt(LOC_Y, location.y);
+        prefs.putInt(SIZE_X, getSize().width);
+        prefs.putInt(SIZE_Y, getSize().height);
     }
 
 
@@ -148,6 +163,7 @@ public class WorkspaceFrame extends JFrame {
 
         Optional<JComponent> statusArea = workspace.getStatusArea();
         statusArea.ifPresent(sa -> contentPane.add(sa, BorderLayout.SOUTH));
+        setMinimumSize(new Dimension(MINIMUM_WIDTH, MINIMUM_HEIGHT));
     }
 
 

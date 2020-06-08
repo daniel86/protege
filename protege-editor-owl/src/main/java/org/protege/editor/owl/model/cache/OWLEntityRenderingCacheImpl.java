@@ -1,11 +1,16 @@
 package org.protege.editor.owl.model.cache;
 
+import com.google.common.collect.*;
 import org.protege.editor.owl.model.OWLModelManager;
 import org.protege.editor.owl.model.util.OWLDataTypeUtils;
 import org.semanticweb.owlapi.model.*;
+import org.semanticweb.owlapi.model.parameters.Imports;
+import org.semanticweb.owlapi.search.EntitySearcher;
 import org.semanticweb.owlapi.vocab.DublinCoreVocabulary;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 
 
@@ -20,26 +25,32 @@ import java.util.*;
  */
 public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
 
-    private Map<String, OWLClass> owlClassMap = new HashMap<>();
+    private final Multimap<String, OWLClass> owlClassMap = ArrayListMultimap.create(16, 1);
 
-    private Map<String, OWLObjectProperty> owlObjectPropertyMap = new HashMap<>();
+    private final Multimap<String, OWLObjectProperty> owlObjectPropertyMap = ArrayListMultimap.create(16, 1);
 
-    private Map<String, OWLDataProperty> owlDataPropertyMap = new HashMap<>();
+    private final Multimap<String, OWLDataProperty> owlDataPropertyMap = ArrayListMultimap.create(16, 1);
 
-    private Map<String, OWLAnnotationProperty> owlAnnotationPropertyMap = new HashMap<>();
+    private final Multimap<String, OWLAnnotationProperty> owlAnnotationPropertyMap = ArrayListMultimap.create(16, 1);
 
-    private Map<String, OWLNamedIndividual> owlIndividualMap = new HashMap<>();
+    private final Multimap<String, OWLNamedIndividual> owlIndividualMap = ArrayListMultimap.create(16, 1);
 
-    private Map<String, OWLDatatype> owlDatatypeMap = new HashMap<>();
+    private final Multimap<String, OWLDatatype> owlDatatypeMap = ArrayListMultimap.create(16, 1);
 
-    private Map<OWLEntity, String> entityRenderingMap = new HashMap<>();
+    private final Map<OWLEntity, String> entityRenderingMap = new HashMap<>();
+
+    private final OWLOntologyChangeListener listener = this::processChanges;
 
     private OWLModelManager owlModelManager;
 
-    private OWLOntologyChangeListener listener = changes -> processChanges(changes);
+    private static final Comparator<DefRefCount<?>> byDefinitionCountThenReferenceCount =
+            Comparator.<DefRefCount<?>>
+            comparingInt(DefRefCount::getDefinitionCount)
+            .thenComparingInt(DefRefCount::getReferenceCount);
 
 
     public OWLEntityRenderingCacheImpl() {
+
     }
 
 
@@ -50,16 +61,11 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
 
 
     private void processChanges(List<? extends OWLOntologyChange> changes) {
-    	Set<OWLEntity> changedEntities = new HashSet<>();
-        for (OWLOntologyChange change : changes) {
-            if (change instanceof OWLAxiomChange) {
-                OWLAxiomChange chg = (OWLAxiomChange) change;
-                changedEntities.addAll(chg.getSignature());
-            }
-        }
-        for (OWLEntity ent : changedEntities) {
-            updateRendering(ent);
-        }
+        changes.stream()
+                .filter(OWLOntologyChange::isAxiomChange)
+                .flatMap(chg -> chg.getSignature().stream())
+                .distinct()
+                .forEach(this::updateRendering);
     }
 
 
@@ -129,34 +135,62 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
         entityRenderingMap.clear();
     }
 
+    private <E extends OWLEntity> E getFirstEntityOrNull(Multimap<String, E> renderingMap, String rendering) {
+        Collection<E> entities = renderingMap.get(rendering);
+        if(entities.isEmpty()) {
+            return null;
+        }
+        if(entities.size() == 1) {
+            return entities.stream().findFirst().get();
+        }
+        // Choose entity based on whether it is defined in the active ontology
+        // and how many axioms define it and how many axioms reference it.  This
+        // is hopefully preferable to choosing an entity at random.
+        return entities.stream().map(this::toActiveOntologyReferenceCount)
+                .max(byDefinitionCountThenReferenceCount)
+                .map(DefRefCount::getEntity)
+                .orElse(null);
+    }
+
 
     public OWLClass getOWLClass(String rendering) {
-        return owlClassMap.get(rendering);
+        return getFirstEntityOrNull(owlClassMap, rendering);
+    }
+
+    public Set<OWLEntity> getOWLEntities(String rendering) {
+        ImmutableSet.Builder<OWLEntity> builder = ImmutableSet.builder();
+        builder.addAll(owlClassMap.get(rendering));
+        builder.addAll(owlObjectPropertyMap.get(rendering));
+        builder.addAll(owlDataPropertyMap.get(rendering));
+        builder.addAll(owlAnnotationPropertyMap.get(rendering));
+        builder.addAll(owlIndividualMap.get(rendering));
+        builder.addAll(owlDatatypeMap.get(rendering));
+        return builder.build();
     }
 
 
     public OWLObjectProperty getOWLObjectProperty(String rendering) {
-        return owlObjectPropertyMap.get(rendering);
+        return getFirstEntityOrNull(owlObjectPropertyMap, rendering);
     }
 
 
     public OWLDataProperty getOWLDataProperty(String rendering) {
-        return owlDataPropertyMap.get(rendering);
+        return getFirstEntityOrNull(owlDataPropertyMap, rendering);
     }
 
 
     public OWLAnnotationProperty getOWLAnnotationProperty(String rendering) {
-        return owlAnnotationPropertyMap.get(rendering);
+        return getFirstEntityOrNull(owlAnnotationPropertyMap, rendering);
     }
 
 
     public OWLNamedIndividual getOWLIndividual(String rendering) {
-        return owlIndividualMap.get(rendering);
+        return getFirstEntityOrNull(owlIndividualMap, rendering);
     }
 
 
     public OWLDatatype getOWLDatatype(String rendering) {
-        return owlDatatypeMap.get(rendering);
+        return getFirstEntityOrNull(owlDatatypeMap, rendering);
     }
 
 
@@ -165,6 +199,7 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
     }
 
 
+    @Nullable
     public OWLEntity getOWLEntity(String rendering) {
         // Examine in the order of class, property, individual
         OWLEntity entity = getOWLClass(rendering);
@@ -197,34 +232,34 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
 
     public void addRendering(OWLEntity owlEntity) {
         owlEntity.accept(new OWLEntityVisitor() {
-            public void visit(OWLDataProperty entity) {
+            public void visit(@Nonnull OWLDataProperty entity) {
                 addRendering(entity, owlDataPropertyMap);
             }
 
-            public void visit(OWLObjectProperty entity) {
+            public void visit(@Nonnull OWLObjectProperty entity) {
                 addRendering(entity, owlObjectPropertyMap);
             }
 
-            public void visit(OWLAnnotationProperty owlAnnotationProperty) {
+            public void visit(@Nonnull OWLAnnotationProperty owlAnnotationProperty) {
                 addRendering(owlAnnotationProperty, owlAnnotationPropertyMap);
             }
 
-            public void visit(OWLNamedIndividual entity) {
+            public void visit(@Nonnull OWLNamedIndividual entity) {
                 addRendering(entity, owlIndividualMap);
             }
 
-            public void visit(OWLClass entity) {
+            public void visit(@Nonnull OWLClass entity) {
                 addRendering(entity, owlClassMap);
             }
 
-            public void visit(OWLDatatype entity) {
+            public void visit(@Nonnull OWLDatatype entity) {
                 addRendering(entity, owlDatatypeMap);
             }
         });
     }
 
 
-    private <T extends OWLEntity> void addRendering(T entity, Map<String, T> map) {
+    private <T extends OWLEntity> void addRendering(T entity, Multimap<String, T> map) {
         if (!entityRenderingMap.containsKey(entity)) {
             String rendering = owlModelManager.getRendering(entity);
             map.put(rendering, entity);
@@ -239,28 +274,28 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
 
         owlEntity.accept(new OWLEntityVisitor() {
 
-            public void visit(OWLClass entity) {
-                owlClassMap.remove(oldRendering);
+            public void visit(@Nonnull OWLClass entity) {
+                owlClassMap.remove(oldRendering, entity);
             }
 
-            public void visit(OWLDataProperty entity) {
-                owlDataPropertyMap.remove(oldRendering);
+            public void visit(@Nonnull OWLDataProperty entity) {
+                owlDataPropertyMap.remove(oldRendering, entity);
             }
 
-            public void visit(OWLObjectProperty entity) {
-                owlObjectPropertyMap.remove(oldRendering);
+            public void visit(@Nonnull OWLObjectProperty entity) {
+                owlObjectPropertyMap.remove(oldRendering, entity);
             }
 
-            public void visit(OWLAnnotationProperty owlAnnotationProperty) {
-                owlAnnotationPropertyMap.remove(oldRendering);
+            public void visit(@Nonnull OWLAnnotationProperty entity) {
+                owlAnnotationPropertyMap.remove(oldRendering, entity);
             }
 
-            public void visit(OWLNamedIndividual entity) {
-                owlIndividualMap.remove(oldRendering);
+            public void visit(@Nonnull OWLNamedIndividual entity) {
+                owlIndividualMap.remove(oldRendering, entity);
             }
 
-            public void visit(OWLDatatype entity) {
-                owlDatatypeMap.remove(oldRendering);
+            public void visit(@Nonnull OWLDatatype entity) {
+                owlDatatypeMap.remove(oldRendering, entity);
             }
         });
     }
@@ -325,5 +360,43 @@ public class OWLEntityRenderingCacheImpl implements OWLEntityRenderingCache {
         renderings.addAll(owlIndividualMap.keySet());
         renderings.addAll(owlDatatypeMap.keySet());
         return renderings;
+    }
+
+    private <E extends OWLEntity> DefRefCount<E> toActiveOntologyReferenceCount(@Nonnull E entity) {
+        OWLOntology activeOntology = owlModelManager.getActiveOntology();
+        int refCount = activeOntology
+                .getReferencingAxioms(entity, Imports.EXCLUDED)
+                .size();
+        int defCount = EntitySearcher.getReferencingAxioms(entity, activeOntology).size();
+        return new DefRefCount<>(entity, defCount, refCount);
+    }
+
+    private static class DefRefCount<E extends OWLEntity> {
+
+        private E entity;
+
+        private int definitionCount;
+
+        private int referenceCount;
+
+        public DefRefCount(E entity,
+                           int definitionCount,
+                           int referenceCount) {
+            this.entity = entity;
+            this.definitionCount = definitionCount;
+            this.referenceCount = referenceCount;
+        }
+
+        public E getEntity() {
+            return entity;
+        }
+
+        public int getDefinitionCount() {
+            return definitionCount;
+        }
+
+        public int getReferenceCount() {
+            return referenceCount;
+        }
     }
 }

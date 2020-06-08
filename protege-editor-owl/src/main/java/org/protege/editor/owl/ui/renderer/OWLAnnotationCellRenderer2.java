@@ -3,6 +3,8 @@ package org.protege.editor.owl.ui.renderer;
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.model.OWLModelManager;
 import org.protege.editor.owl.model.entity.AnnotationPropertyComparator;
+import org.protege.editor.owl.model.identifiers.IdentifiersDotOrgLinkExtractor;
+import org.protege.editor.owl.model.obofoundry.OboFoundryLinkExtractor;
 import org.protege.editor.owl.model.util.LiteralChecker;
 import org.protege.editor.owl.ui.list.AbstractAnnotationsList;
 import org.protege.editor.owl.ui.renderer.layout.*;
@@ -34,7 +36,7 @@ import static org.protege.editor.owl.ui.renderer.InlineDatatypeRendering.RENDER_
  */
 public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
 
-    public static final Color ANNOTATION_PROPERTY_FOREGROUND = new Color(65, 108, 226);
+    public static final Color ANNOTATION_PROPERTY_FOREGROUND = Color.BLACK;
 
     private OWLEditorKit editorKit;
 
@@ -46,14 +48,16 @@ public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
 
     private InlineDatatypeRendering datatypeRendering = RENDER_DATATYPE_INLINE;
 
-    private AnnotationRenderingStyle annotationRenderingStyle = AnnotationRenderingStyle.COMFORTABLE;
+    private AnnotationRenderingStyle annotationRenderingStyle = AnnotationRenderingStyle.COSY;
 
     private InlineThumbnailRendering thumbnailRendering = InlineThumbnailRendering.DISPLAY_THUMBNAILS_INLINE;
 
     private final List<LinkExtractor> linkExtractors = Arrays.asList(
             PubMedLinkExtractor.createExtractor(),
             ISBN10LinkExtractor.createExtractor(),
-            WikipediaLinkExtractor.createExtractor());
+            WikipediaLinkExtractor.createExtractor(),
+            IdentifiersDotOrgLinkExtractor.createExtractor(),
+            OboFoundryLinkExtractor.createLinkExtractor());
 
     public OWLAnnotationCellRenderer2(OWLEditorKit editorKit) {
         super();
@@ -107,6 +111,16 @@ public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
      */
     public boolean isReferenceOntologyActive() {
         return ontology != null && ontology.equals(editorKit.getOWLModelManager().getActiveOntology());
+    }
+
+    private String getOntologyRendering() {
+        if(ontology == null) {
+            return "";
+        }
+        if(ontology.equals(editorKit.getOWLModelManager().getActiveOntology())) {
+            return "";
+        }
+        return editorKit.getOWLModelManager().getRendering(ontology);
     }
 
     @Override
@@ -207,7 +221,7 @@ public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
                     renderCellValue(subAnnotationPage, anno, foreground, background, isSelected);
                 }
                 subAnnotationPage.setMarginLeft(40);
-                subAnnotationPage.setOpacity(0.6);
+//                subAnnotationPage.setOpacity(0.6);
                 page.add(subAnnotationPage);
             }
         }
@@ -277,17 +291,23 @@ public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
      */
     private Paragraph renderAnnotationProperty(Page page, OWLAnnotation annotation, Color defaultForeground, Color defaultBackground, boolean isSelected) {
         OWLAnnotationProperty property = annotation.getProperty();
-        String rendering = editorKit.getOWLModelManager().getRendering(property);
+        String escapedRendering = editorKit.getOWLModelManager().getRendering(property);
+        String rendering = RenderingEscapeUtils.unescape(escapedRendering);
         Paragraph paragraph = page.addParagraph(rendering);
         Color foreground = getAnnotationPropertyForeground(defaultForeground, isSelected);
         paragraph.setForeground(foreground);
-//        if (isReferenceOntologyActive()) {
-//            paragraph.setBold(true);
-//        }
+        paragraph.setBold(true);
+        paragraph.setSize(12);
         if (annotation.getValue() instanceof OWLLiteral) {
             OWLLiteral literalValue = (OWLLiteral) annotation.getValue();
             paragraph.append("    ", foreground);
             appendTag(paragraph, literalValue, foreground, isSelected);
+        }
+        if (!isReferenceOntologyActive()) {
+            String ontologyRendering = getOntologyRendering();
+            if(!ontologyRendering.isEmpty()) {
+                paragraph.append("  [in " + ontologyRendering + "]", Color.LIGHT_GRAY);
+            }
         }
         switch (annotationRenderingStyle) {
             case COMFORTABLE:
@@ -554,12 +574,13 @@ public class OWLAnnotationCellRenderer2 extends PageCellRenderer {
     private void appendTag(Paragraph tagParagraph, OWLLiteral literal, Color foreground, boolean isSelected) {
         Color tagColor = isSelected ? foreground : Color.GRAY;
         Color tagValueColor = isSelected ? foreground : Color.GRAY;
+
         if (literal.hasLang()) {
             tagParagraph.append("[language: ", tagColor);
             tagParagraph.append(literal.getLang(), tagValueColor);
             tagParagraph.append("]", tagColor);
         }
-        else if (datatypeRendering == RENDER_DATATYPE_INLINE && !literal.isRDFPlainLiteral()) {
+        else if (datatypeRendering == RENDER_DATATYPE_INLINE && !literal.isRDFPlainLiteral() && !literal.getDatatype().isString()) {
             tagParagraph.append("[type: ", tagColor);
             tagParagraph.append(editorKit.getOWLModelManager().getRendering(literal.getDatatype()), tagValueColor);
             tagParagraph.append("]", tagColor);

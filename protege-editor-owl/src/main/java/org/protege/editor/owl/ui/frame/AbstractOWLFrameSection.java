@@ -49,7 +49,7 @@ public abstract class AbstractOWLFrameSection<R extends Object, A extends OWLAxi
 
     private boolean cacheEditor = true;
 
-    private OWLOntologyChangeListener listener = changes -> processOntologyChanges(changes);
+    private OWLOntologyChangeListener listener = this::processOntologyChanges;
 
 
     protected AbstractOWLFrameSection(OWLEditorKit editorKit, String label, String rowLabel, OWLFrame<? extends R> frame) {
@@ -182,13 +182,15 @@ public abstract class AbstractOWLFrameSection<R extends Object, A extends OWLAxi
         Set<A> axioms = new HashSet<>();
         List<OWLOntologyChange> changes = new ArrayList<>();
         for (E editedObject : editedObjects) {
-            final A ax = createAxiom(editedObject);
-            FreshAxiomLocationPreferences prefs = FreshAxiomLocationPreferences.getPreferences();
-            FreshActionStrategySelector strategySelector = new FreshActionStrategySelector(prefs, owlEditorKit);
-            FreshAxiomLocationStrategy strategy = strategySelector.getFreshAxiomLocationStrategy();
-            OWLOntology ontology = strategy.getFreshAxiomLocation(ax, getOWLModelManager());
-            changes.add(new AddAxiom(ontology, ax));
-            axioms.add(ax);
+            if(editedObject != null) {
+                final A ax = createAxiom(editedObject);
+                FreshAxiomLocationPreferences prefs = FreshAxiomLocationPreferences.getPreferences();
+                FreshActionStrategySelector strategySelector = new FreshActionStrategySelector(prefs, owlEditorKit);
+                FreshAxiomLocationStrategy strategy = strategySelector.getFreshAxiomLocationStrategy();
+                OWLOntology ontology = strategy.getFreshAxiomLocation(ax, getOWLModelManager());
+                changes.add(new AddAxiom(ontology, ax));
+                axioms.add(ax);
+            }
         }
         getOWLModelManager().applyChanges(changes);
         for (A axiom : axioms){

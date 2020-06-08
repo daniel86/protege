@@ -5,8 +5,12 @@ import org.semanticweb.owlapi.util.DefaultPrefixManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.swing.table.AbstractTableModel;
 import java.util.*;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Comparator.naturalOrder;
 
 
 /**
@@ -19,101 +23,84 @@ import java.util.*;
  * www.cs.man.ac.uk/~horridgm<br><br>
  */
 public class PrefixMapperTableModel extends AbstractTableModel {
-	private static final long serialVersionUID = -5098097390890500539L;
-	
+
 	private final Logger logger = LoggerFactory.getLogger(PrefixMapperTableModel.class);
 	
 	public enum Column {
 		PREFIX_NAME, PREFIX
 	}
 	
-	
-	private List<String> prefixes;
 
-    private Map<String, String> prefixValueMap;
-    
-    private PrefixDocumentFormat prefixManager;
+	@Nonnull
+	private final List<String> prefixNames = new ArrayList<>();
+
+	@Nonnull
+    private final Map<String, String> prefixName2PrefixMap = new HashMap<>();
+
+    @Nonnull
+    private final PrefixDocumentFormat prefixManager;
     
     private boolean changed = false;
 
 
-    public PrefixMapperTableModel(PrefixDocumentFormat prefixManager) {
-    	this.prefixManager = prefixManager;
-        prefixValueMap = new HashMap<>();
-        prefixes = new ArrayList<>();
+    public PrefixMapperTableModel(@Nonnull PrefixDocumentFormat prefixManager) {
+    	this.prefixManager = checkNotNull(prefixManager);
         refill();
     }
 
     public void refill() {
-    	logger.debug("Clearing changed flag because of a refill operation");
     	changed = false;
-    	// arguably here we should only delete the prefixes that don't have an empty value
+    	// arguably here we should only delete the prefixNames that don't have an empty value
     	// it is a little weird when they disappear because they were not committed to the PrefixOWLOntologyFormat
-    	prefixes.clear();
-    	prefixValueMap.clear();
+    	prefixNames.clear();
+    	prefixName2PrefixMap.clear();
 
-        for (Map.Entry<String, String> prefixName2PrefixEntry : prefixManager.getPrefixName2PrefixMap().entrySet()) {
-        	String prefixName = prefixName2PrefixEntry.getKey();
-        	String prefix     = prefixName2PrefixEntry.getValue();
-        	// remove trailing :
-        	prefixName = prefixName.substring(0, prefixName.length() - 1);
-        	prefixValueMap.put(prefixName, prefix);
-        }
-        prefixes.addAll(prefixValueMap.keySet());
-        Collections.sort(prefixes);
+		prefixManager.getPrefixName2PrefixMap()
+				.forEach(prefixName2PrefixMap::put);
+        prefixNames.addAll(prefixName2PrefixMap.keySet());
+        prefixNames.sort(naturalOrder());
         fireTableDataChanged();
     }
     
     public int getIndexOfPrefix(String prefix) {
-    	return prefixes.indexOf(prefix);
+    	return prefixNames.indexOf(prefix);
     }
 
     public int addMapping(String prefix, String value) {
     	changed = changed || (value != null && value.length() != 0);
-    	if (logger.isDebugEnabled()) {
-    		logger.debug("adding mapping " + prefix + " -> " + value + " changed = " + changed);
-    	}
-    	prefixes.add(prefix);
-    	Collections.sort(prefixes);
-        prefixValueMap.put(prefix, value);
+    	prefixNames.add(prefix);
+        prefixName2PrefixMap.put(prefix, value);
 	    fireTableDataChanged();
-        return prefixes.indexOf(prefix);
+        return prefixNames.indexOf(prefix);
     }
 
 
     public void removeMapping(String prefix) {
-    	prefixes.remove(prefix);
-	    String prefixValue = prefixValueMap.remove(prefix);
+    	prefixNames.remove(prefix);
+	    String prefixValue = prefixName2PrefixMap.remove(prefix);
 	    changed = changed || (prefixValue != null & prefixValue.length() != 0);
-    	if (logger.isDebugEnabled()) {
-    		logger.debug("removing mapping " + prefix + " -> " + prefixValue + " changed = " + changed);
-    	}
 	    fireTableDataChanged();
 	}
 
 	public boolean commitPrefixes() {
-    	if (changed) {
-    		if (logger.isDebugEnabled()) {
-    			logger.debug("committing prefix changes and clearing changed flag");
-    		}
-    		prefixManager.setPrefixManager(new DefaultPrefixManager());
-    		for (Map.Entry<String, String> prefixName2PrefixEntry : prefixValueMap.entrySet()) {
-    			String prefixName = prefixName2PrefixEntry.getKey();
-    			String prefix     = prefixName2PrefixEntry.getValue();
-    			if (prefix != null && prefix.length() != 0) {
-    				// tailing : automatically added in here
-    				prefixManager.setPrefix(prefixName, prefix);
-    			}
-    		}
-    		changed = false;
-    		return true;
-    	}
-    	return false;
-    }
+		if(!changed) {
+			return false;
+		}
+		prefixManager.setPrefixManager(new DefaultPrefixManager());
+		for (Map.Entry<String, String> prefixName2PrefixEntry : prefixName2PrefixMap.entrySet()) {
+			String prefixName = prefixName2PrefixEntry.getKey();
+			String prefix     = prefixName2PrefixEntry.getValue();
+			if (prefix != null && prefix.length() != 0) {
+				prefixManager.setPrefix(prefixName, prefix);
+			}
+		}
+		changed = false;
+		return true;
+	}
 
 
     public void sortTable() {
-    	Collections.sort(prefixes);
+    	Collections.sort(prefixNames);
     }
 
     /*
@@ -124,9 +111,9 @@ public class PrefixMapperTableModel extends AbstractTableModel {
 	public String getColumnName(int column) {
 		switch (Column.values()[column]) {
 		case PREFIX_NAME:
-			return "Prefix";
+			return "Prefix Name";
 		case PREFIX:
-			return "Value";
+			return "Prefix";
 		default:
 			throw new UnsupportedOperationException("Programmer error: missed a case");
 		}
@@ -134,7 +121,7 @@ public class PrefixMapperTableModel extends AbstractTableModel {
 
 
 	public int getRowCount() {
-	    return prefixes.size();
+	    return prefixNames.size();
 	}
 
 
@@ -145,17 +132,17 @@ public class PrefixMapperTableModel extends AbstractTableModel {
 
 	@Override
 	public boolean isCellEditable(int rowIndex, int columnIndex) {
-	    return !PrefixUtilities.isStandardPrefix(prefixes.get(rowIndex));
+	    return !PrefixUtilities.isStandardPrefix(prefixNames.get(rowIndex));
 	}
 
 
 	public Object getValueAt(int rowIndex, int columnIndex) {
-	    String prefix = prefixes.get(rowIndex);
+	    String prefix = prefixNames.get(rowIndex);
 		switch (Column.values()[columnIndex]) {
 		case PREFIX_NAME:
 			return prefix;
 		case PREFIX:
-			return prefixValueMap.get(prefix);
+			return prefixName2PrefixMap.get(prefix);
 		default:
 			throw new UnsupportedOperationException("Programmer error: missed a case");
 		}
@@ -167,31 +154,33 @@ public class PrefixMapperTableModel extends AbstractTableModel {
 	    String currentPrefixName = (String) getValueAt(rowIndex, Column.PREFIX_NAME.ordinal());
 		switch (Column.values()[columnIndex]) {
 		case PREFIX_NAME:
-	        // Replacing prefix name 
-	    	String newPrefix = aValue.toString();
-	        if (!prefixes.contains(newPrefix)){
-	        	prefixes.remove(currentPrefixName);
-	        	prefixes.add(newPrefix);
-	        	Collections.sort(prefixes);
-	        	String prefixValue = prefixValueMap.remove(currentPrefixName);
-	        	prefixValueMap.put(newPrefix, prefixValue);
-	        	changed = changed || (prefixValue != null && prefixValue.length() != 0);
-	        	if (logger.isDebugEnabled()) {
-	        		logger.debug("Changed the name associated with the prefix " + prefixValue + " from " + currentPrefixName + " to " + newPrefix + " changed = " + changed);
-	        	}
-	        	fireTableDataChanged();
-	        }
-	        break;
+			setPrefixNameAt(aValue, currentPrefixName);
+			break;
 		case PREFIX:
-	        // Replacing value
-			if (logger.isDebugEnabled()) {
-				logger.debug("Changing the value associated with the prefix " + currentPrefixName + " with a delete and an add.");
-			}
-			removeMapping(currentPrefixName);
-	        addMapping(currentPrefixName, aValue.toString());
-	        break;
+			setPrefixAt(aValue, currentPrefixName);
+			break;
 		default:
 			throw new UnsupportedOperationException("Programmer error: missed a case");
 		}
+	}
+
+	private void setPrefixNameAt(Object aValue,
+								 String currentPrefixName) {
+		String newPrefix = aValue.toString();
+		if(prefixNames.contains(newPrefix)) {
+			return;
+		}
+		prefixNames.remove(currentPrefixName);
+		prefixNames.add(newPrefix);
+		String prefixValue = prefixName2PrefixMap.remove(currentPrefixName);
+		prefixName2PrefixMap.put(newPrefix, prefixValue);
+		changed = changed || (prefixValue != null && prefixValue.length() != 0);
+		fireTableDataChanged();
+	}
+
+	private void setPrefixAt(Object aValue,
+							 String currentPrefixName) {
+		removeMapping(currentPrefixName);
+		addMapping(currentPrefixName, aValue.toString());
 	}
 }

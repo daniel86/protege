@@ -8,15 +8,15 @@ import org.protege.editor.core.Fonts;
 import org.protege.editor.core.ProtegeApplication;
 import org.protege.editor.core.ProtegeManager;
 import org.protege.editor.core.editorkit.EditorKit;
+import org.protege.editor.core.log.LogStatusLabel;
 import org.protege.editor.core.plugin.AbstractPluginLoader;
 import org.protege.editor.core.plugin.PluginUtilities;
 import org.protege.editor.core.ui.RefreshableComponent;
 import org.protege.editor.core.ui.action.ProtegeAction;
 import org.protege.editor.core.ui.action.ProtegeActionPluginJPFImpl;
 import org.protege.editor.core.ui.error.ErrorLog;
-import org.protege.editor.core.ui.error.ErrorLogListener;
-import org.protege.editor.core.ui.error.ErrorNotificationLabel;
 import org.protege.editor.core.ui.error.SendErrorReportHandler;
+import org.protege.editor.core.ui.util.SearchIcon;
 import org.protege.editor.core.util.HandlerRegistration;
 import org.protege.editor.owl.ui.breadcrumb.*;
 import org.protege.editor.core.ui.progress.BackgroundTaskLabel;
@@ -104,7 +104,7 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
 
     private final Set<EventType> reselectionEventTypes = new HashSet<>();
 
-    private final ErrorNotificationLabel errorNotificationLabel = new ErrorNotificationLabel();
+    private final LogStatusLabel logStatusLabel = new LogStatusLabel();
 
     private final BackgroundTaskLabel backgroundTaskLabel = new BackgroundTaskLabel(ProtegeApplication.getBackgroundTaskManager());
 
@@ -155,19 +155,6 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
             }
     );
 
-    private final ErrorLogListener errorLogListener = new ErrorLogListener() {
-        @Override
-        public void errorLogged() {
-            errorNotificationLabel.setVisible(true);
-        }
-
-        @Override
-        public void errorLogCleared() {
-            errorNotificationLabel.setVisible(false);
-        }
-    };
-
-
     private String altTitle;
 
     private boolean reasonerManagerStarted = false;
@@ -189,6 +176,8 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
         statusArea.add(reasonerStatus);
         statusArea.add(Box.createHorizontalStrut(10));
         statusArea.add(displayReasonerResults);
+        statusArea.add(Box.createHorizontalStrut(10));
+        statusArea.add(logStatusLabel);
         statusArea.add(Box.createHorizontalStrut(10));
 
 
@@ -216,8 +205,7 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
     public void initialise() {
         super.initialise();
 
-        ProtegeApplication.getLogManager().addErrorLogListener(errorLogListener);
-
+        ProtegeApplication.getLogManager().addErrorLogListener(logStatusLabel);
 
         breadcrumbTrailProviderManager.start();
 
@@ -672,7 +660,7 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
                         0, 0,
                         1, 1,
                         0, 0,
-                        GridBagConstraints.BASELINE, GridBagConstraints.NONE,
+                        GridBagConstraints.CENTER, GridBagConstraints.NONE,
                         new Insets(0, 0, 0, 2),
                         0, 0));
 
@@ -700,7 +688,15 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
             }
         });
 
-        JButton searchButton = new JButton("Search...");
+        SearchIcon searchIcon = new SearchIcon(OWLSystemColors.getForegroundColor());
+        JButton searchButton = new JButton("", searchIcon);
+        searchButton.setBorderPainted(false);
+        searchButton.setBorder(null);
+        searchButton.setBackground(null);
+        searchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        searchButton.setRolloverEnabled(true);
+        searchButton.setToolTipText("Search");
+        searchButton.setRolloverIcon(new SearchIcon(OWLSystemColors.getRolloverForegroundColor()));
         searchButton.addActionListener(e -> showSearchDialog());
 
         topBarPanel.add(searchButton, new GridBagConstraints(
@@ -723,30 +719,19 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
                         new Insets(0, 0, 0, 0),
                         0, 0
                 ));
-        topBarPanel.add(errorNotificationLabel,
-                new GridBagConstraints(
-                        4, 0,
-                        1, 1,
-                        0, 0,
-                        GridBagConstraints.EAST,
-                        GridBagConstraints.NONE,
-                        new Insets(0, 0, 0, 0),
-                        0, 0
-                )
-        );
 
-        topBarPanel.add(breadcrumbTrailPresenter.getBreadcrumbTrailView().asJComponent(),
+        JComponent breadCrumbView = breadcrumbTrailPresenter.getBreadcrumbTrailView().asJComponent();
+        topBarPanel.add(breadCrumbView,
                         new GridBagConstraints(
                                 0, 1,
                                 4, 1,
                                 100, 0,
                                 GridBagConstraints.BASELINE_LEADING,
                                 GridBagConstraints.HORIZONTAL,
-                                new Insets(1, 0, 0, 0),
+                                new Insets(3, 0, 0, 1),
                                 0, 0
                         ));
         add(topBarPanel, BorderLayout.NORTH);
-
         updateTitleBar();
     }
 
@@ -928,7 +913,7 @@ public class OWLWorkspace extends TabbedWorkspace implements SendErrorReportHand
 
         repoStatusPresenter.dispose();
 
-        ProtegeApplication.getLogManager().removeErrorLogListener(errorLogListener);
+        ProtegeApplication.getLogManager().removeErrorLogListener(logStatusLabel);
 
         getOWLModelManager().removeListener(owlModelManagerListener);
         getOWLModelManager().removeOntologyChangeListener(listener);

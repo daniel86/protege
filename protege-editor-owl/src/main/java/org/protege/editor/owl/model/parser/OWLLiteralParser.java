@@ -1,10 +1,10 @@
 package org.protege.editor.owl.model.parser;
 
-import com.google.common.base.Optional;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLLiteral;
 import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -35,7 +35,6 @@ public class OWLLiteralParser {
         String normalisedValue = value.trim();
         return parse(normalisedValue,
                 BOOLEAN_LITERAL_PARSER,
-                INTEGER_LITERAL_PARSER,
                 DECIMAL_LITERAL_PARSER,
                 FLOAT_LITERAL_PARSER);
 
@@ -49,7 +48,7 @@ public class OWLLiteralParser {
                 return lit.get();
             }
         }
-        return dataFactory.getOWLLiteral(value, "");
+        return dataFactory.getOWLLiteral(value, OWL2Datatype.XSD_STRING);
     }
 
     private static class LiteralParser {
@@ -76,7 +75,7 @@ public class OWLLiteralParser {
                 return Optional.of(dataFactory.getOWLLiteral(normalisedValue, datatype));
             }
             else {
-                return Optional.absent();
+                return Optional.empty();
             }
         }
     }

@@ -10,7 +10,9 @@ import org.protege.editor.owl.model.event.OWLModelManagerChangeEvent;
 import org.protege.editor.owl.model.event.OWLModelManagerListener;
 import org.protege.editor.owl.model.refactor.ontology.EntityIRIUpdaterOntologyChangeStrategy;
 import org.protege.editor.owl.ui.ontology.annotation.OWLOntologyAnnotationList;
+import org.protege.editor.owl.ui.prefix.PrefixUtilities;
 import org.protege.editor.owl.ui.view.AbstractOWLViewComponent;
+import org.semanticweb.owlapi.formats.PrefixDocumentFormat;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.util.OWLOntologyChangeVisitorAdapter;
 
@@ -33,6 +35,7 @@ import java.util.Set;
  * Bio-Health Informatics Group<br>
  * Date: 04-Feb-2007<br><br>
  */
+@SuppressWarnings("Guava")
 public class OWLOntologyAnnotationViewComponent extends AbstractOWLViewComponent {
 
 
@@ -43,9 +46,9 @@ public class OWLOntologyAnnotationViewComponent extends AbstractOWLViewComponent
     public static final String ONTOLOGY_VERSION_IRI_FIELD_LABEL = "Ontology Version IRI";
 
 
-    public static final URI ONTOLOGY_IRI_DOCUMENTATION = URI.create("http://www.w3.org/TR/2009/REC-owl2-syntax-20091027/#Ontology_IRI_and_Version_IRI");
+    public static final URI ONTOLOGY_IRI_DOCUMENTATION = URI.create("https://www.w3.org/TR/owl2-syntax/#Ontology_IRI_and_Version_IRI");
 
-    public static final URI VERSION_IRI_DOCUMENTATION = URI.create("http://www.w3.org/TR/2009/REC-owl2-syntax-20091027/#Versioning_of_OWL_2_Ontologies");
+    public static final URI VERSION_IRI_DOCUMENTATION = URI.create("https://www.w3.org/TR/owl2-syntax/#Versioning_of_OWL_2_Ontologies");
 
 
     private OWLModelManagerListener listener;
@@ -240,6 +243,9 @@ public class OWLOntologyAnnotationViewComponent extends AbstractOWLViewComponent
      * Updates the view from the model - unless the changes were triggered by changes in the view.
      */
     private void updateViewFromModel() {
+        if(updatingModelFromView) {
+            return;
+        }
         updatingViewFromModel = true;
         try {
             OWLOntology activeOntology = getOWLEditorKit().getOWLModelManager().getActiveOntology();
@@ -291,15 +297,47 @@ public class OWLOntologyAnnotationViewComponent extends AbstractOWLViewComponent
         }
         try {
             updatingModelFromView = true;
-            OWLOntologyID id = createOWLOntologyIDFromView();
-            if (id != null && !activeOntology().getOntologyID().equals(id)) {
-                getOWLModelManager().applyChange(new SetOntologyID(activeOntology(), id));
+            OWLOntologyID nextId = createOWLOntologyIDFromView();
+            OWLOntologyID currentId = activeOntology().getOntologyID();
+            if (nextId != null && !currentId.equals(nextId)) {
+                updateEmptyPrefixIfNecessary(currentId, nextId);
+                getOWLModelManager().applyChange(new SetOntologyID(activeOntology(), nextId));
             }
         }
         finally {
             updatingModelFromView = false;
         }
 
+    }
+
+    private void updateEmptyPrefixIfNecessary(OWLOntologyID currentId, OWLOntologyID nextId) {
+        OWLDocumentFormat format = getOWLModelManager().getOWLOntologyManager().getOntologyFormat(activeOntology());
+        if(!(format instanceof PrefixDocumentFormat)) {
+            return;
+        }
+        PrefixDocumentFormat prefixFormat = (PrefixDocumentFormat) format;
+        Optional<IRI> currentOntologyIri = currentId.getOntologyIRI();
+        if(!currentOntologyIri.isPresent()) {
+            return;
+        }
+        Optional<IRI> nextOntologyIri = nextId.getOntologyIRI();
+        if(!nextOntologyIri.isPresent()) {
+            return;
+        }
+        String emptyPrefix = prefixFormat.getDefaultPrefix();
+        if(emptyPrefix == null) {
+            return;
+        }
+        if(!isPrefixDerivedFromOntologyIri(currentOntologyIri.get(), emptyPrefix)) {
+            return;
+        }
+        String nextEmptyPrefix = nextOntologyIri.get() + "/";
+        prefixFormat.setDefaultPrefix(nextEmptyPrefix);
+    }
+
+    private static boolean isPrefixDerivedFromOntologyIri(IRI ontologyIri,
+                                                          String prefix) {
+        return (ontologyIri.toString() + "/").equals(prefix);
     }
 
     private OWLOntology activeOntology() {

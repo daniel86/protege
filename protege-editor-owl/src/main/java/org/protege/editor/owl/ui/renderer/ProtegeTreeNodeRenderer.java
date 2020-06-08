@@ -2,6 +2,7 @@ package org.protege.editor.owl.ui.renderer;
 
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.model.OWLModelManager;
+import org.protege.editor.owl.model.prefix.PrefixedNameRenderer;
 import org.protege.editor.owl.ui.tree.OWLModelManagerTree;
 import org.protege.editor.owl.ui.tree.OWLObjectTreeNode;
 import org.semanticweb.owlapi.model.*;
@@ -14,11 +15,14 @@ import javax.swing.*;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreeCellRenderer;
 import java.awt.*;
+import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.awt.RenderingHints.KEY_ANTIALIASING;
 import static java.awt.RenderingHints.VALUE_ANTIALIAS_ON;
+import static java.util.stream.Collectors.joining;
 import static javax.swing.SwingConstants.CENTER;
+import static org.protege.editor.owl.ui.renderer.RenderingEscapeUtils.RenderingEscapeSetting.UNESCAPED_RENDERING;
 
 /**
  * Matthew Horridge
@@ -30,6 +34,8 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
     private static final Color UNSAT_ENTITY_COLOR = Color.RED;
 
     private static final Color DEPRECATED_CLASS_COLOR = Color.GRAY;
+
+    private static final String EQUIV_SEPARATOR = " \u2261 ";
 
 
     @Nonnull
@@ -45,6 +51,11 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
     private Font plainFont = new Font("sans-serif", Font.PLAIN, 12);
 
     private Font boldFont = plainFont.deriveFont(Font.BOLD);
+
+    private final PrefixedNameRenderer prefixedNameRenderer = PrefixedNameRenderer.builder()
+            .withOwlPrefixes()
+            .withWellKnownPrefixes()
+            .build();
 
 
     public ProtegeTreeNodeRenderer(@Nonnull OWLEditorKit editorKit) {
@@ -70,6 +81,7 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
                                                   int row,
                                                   boolean hasFocus) {
         setupFonts();
+        boolean consistent = true;
         boolean deprecated = false;
         boolean satisfiable = true;
         boolean active = false;
@@ -78,12 +90,20 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
         icon.clearRelationship();
         icon.setRelationshipsDisplayed(false);
         if(value instanceof OWLObjectTreeNode) {
-            OWLObjectTreeNode<?> node = (OWLObjectTreeNode<?>) value;
+            OWLObjectTreeNode<? extends OWLObject> node = (OWLObjectTreeNode<? extends OWLObject>) value;
             OWLObject object = node.getOWLObject();
             if (object != null) {
-                rendering = RenderingEscapeUtils.unescape(editorKit.getOWLModelManager().getRendering(object));
+                consistent = isConsistent();
+                if(consistent) {
+                    satisfiable = isSatisfiable(object);
+                }
+                rendering = getNodeStringRendering(node);
+                String equivsRendering = node.getEquivalentObjects().stream()
+                        .map(this::getOwlObjectDisabmiguatedRendering)
+                        .map(this::prefixWithEquivalentSymbol)
+                        .collect(joining());
+                rendering += equivsRendering;
                 deprecated = isDeprecated(object);
-                satisfiable = isSatisfiable(object);
                 active = isActive(object);
                 Icon entityIcon = editorKit.getOWLWorkspace().getOWLIconProvider().getIcon(object);
                 icon.setIcon(entityIcon);
@@ -93,7 +113,7 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
             }
         }
         delegateTreeCellRenderer.setDeprecated(deprecated);
-        if(!satisfiable) {
+        if(!consistent || !satisfiable) {
             delegateTreeCellRenderer.setTextNonSelectionColor(UNSAT_ENTITY_COLOR);
         }
         else {
@@ -120,8 +140,23 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
         icon.setDeprecated(deprecated);
         icon.rebuild();
         renderingComponent.setIcon(icon);
+        renderingComponent.setVerticalTextPosition(CENTER);
         renderingComponent.setVerticalAlignment(CENTER);
+
         return renderingComponent;
+    }
+
+    private String prefixWithEquivalentSymbol(String equivRendering) {
+        return EQUIV_SEPARATOR + equivRendering;
+    }
+
+    private String getNodeStringRendering(OWLObjectTreeNode<?> node) {
+        OWLObject object = node.getOWLObject();
+        return getOwlObjectDisabmiguatedRendering(object);
+    }
+
+    private String getOwlObjectDisabmiguatedRendering(OWLObject object) {
+        return editorKit.getOWLModelManager().getDisabmiguatedRendering(object, UNESCAPED_RENDERING);
     }
 
     private static boolean shouldDisplayRelationships(@Nonnull JTree tree) {
@@ -132,6 +167,13 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
 
     private boolean isDeprecated(@Nonnull OWLObject owlObject) {
         return editorKit.getOWLModelManager().isDeprecated(owlObject);
+    }
+
+    private boolean isConsistent() {
+        return editorKit.getOWLModelManager()
+                .getOWLReasonerManager()
+                .getCurrentReasoner()
+                .isConsistent();
     }
 
     private boolean isSatisfiable(@Nonnull OWLObject owlObject) {
@@ -210,7 +252,7 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
             super.paintComponent(g);
             if(deprecated) {
                 int textOffset = getIcon().getIconWidth() + getIconTextGap();
-                int y = getHeight() / 2;
+                int y = (int) (getHeight() * 3.0 / 5.0);
                 g.drawLine(textOffset, y, getWidth(), y);
             }
         }
@@ -287,12 +329,14 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
             if (icon == null) {
                 return;
             }
-            int xOffset = 1;
+
+            int xOffset = 1 + x;
             Graphics2D g2 = (Graphics2D) g;
             Composite comp = g2.getComposite();
             if(deprecated) {
                 g2.setComposite(alpha);
             }
+
             g2.setRenderingHint(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON);
             if (relationshipsDisplayed) {
                 g2.setStroke(RELATIONSHIP_STROKE);
@@ -303,14 +347,14 @@ public class ProtegeTreeNodeRenderer implements TreeCellRenderer {
                     g.setColor(UNSPECIFIED_RELATIONSHIP_COLOR);
                 }
                 // Paint a left pointing arrow
-                int lineY = height / 2;
+                int lineY = y + height / 2;
                 g.drawLine(xOffset + 5, lineY, xOffset + 14, lineY);
                 g.drawLine(xOffset + 4, lineY, xOffset + 6, lineY - 2);
                 g.drawLine(xOffset + 4, lineY, xOffset + 6, lineY + 2);
                 xOffset += 16;
             }
             if (icon != null) {
-                icon.paintIcon(c, g, xOffset, 0);
+                icon.paintIcon(c, g, xOffset, y);
             }
             g2.setComposite(comp);
         }
