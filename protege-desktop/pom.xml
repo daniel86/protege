@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>edu.stanford.protege</groupId>
 		<artifactId>protege-parent</artifactId>
-		<version>5.2.1-SNAPSHOT</version>
+		<version>5.6.0-beta-1-SNAPSHOT</version>
 		<relativePath>../</relativePath>
 	</parent>
 	
@@ -16,9 +16,6 @@
 	<description>Standard build of the Protege Desktop ontology editor.</description>
 
 	<properties>
-		<conf.mem.xmx>500</conf.mem.xmx>
-		<conf.mem.xms>200</conf.mem.xms>
-		<conf.mem.xss>16</conf.mem.xss>
 		<conf.extra.args>-XX:CompileCommand=exclude,javax/swing/text/GlyphView,getBreakSpot</conf.extra.args>
 		<osx.bundle.name>Protégé.app</osx.bundle.name>
 	</properties>
@@ -71,21 +68,21 @@
 		<dependency>
 			<groupId>edu.stanford.protege</groupId>
 			<artifactId>jre.os-x</artifactId>
-			<version>1.8.0_40</version>
+			<version>1.8.0_121</version>
 			<scope>runtime</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>edu.stanford.protege</groupId>
 			<artifactId>jre.win</artifactId>
-			<version>1.8.0_40</version>
+			<version>1.8.0_121</version>
 			<scope>runtime</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>edu.stanford.protege</groupId>
 			<artifactId>jre.linux</artifactId>
-			<version>1.8.0_40</version>
+			<version>1.8.0_121</version>
 			<scope>runtime</scope>
 		</dependency>
 

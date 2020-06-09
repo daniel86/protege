@@ -19,6 +19,11 @@ import javax.annotation.Nonnull;
  */
 public class RenderingEscapeUtils {
 
+    public enum RenderingEscapeSetting {
+        ESCAPED_RENDERING,
+        UNESCAPED_RENDERING
+    }
+
     /**
      * Produces an "escaped" rendering.  If the original rendering contains
      * spaces, braces, brackets or commas, and various other symbols used as delimeters in the
@@ -28,6 +33,7 @@ public class RenderingEscapeUtils {
      * @return The escaped rendering.
      */
     public static String getEscapedRendering(String originalRendering) {
+        originalRendering = originalRendering.replace("'", "\\'");
         if (originalRendering.indexOf(' ') != -1
                 || originalRendering.indexOf(',') != -1
                 || originalRendering.indexOf('<') != -1
@@ -50,6 +56,7 @@ public class RenderingEscapeUtils {
 
     @Nonnull
     public static String unescape(@Nonnull String rendering) {
+        rendering = rendering.replace("\\'", "'");
         if(rendering.startsWith("'") && rendering.endsWith("'")) {
             return rendering.substring(1, rendering.length() - 1);
         }

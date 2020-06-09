@@ -1,17 +1,24 @@
 package org.protege.editor.owl.ui;
 
+import com.google.common.collect.ImmutableList;
 import org.protege.editor.core.ui.util.JOptionPaneEx;
 import org.protege.editor.core.ui.util.UIUtil;
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.model.OWLModelManager;
+import org.protege.editor.owl.model.lang.LangCode;
+import org.protege.editor.owl.model.lang.LangCodeRegistry;
 import org.protege.editor.owl.model.util.OWLDataTypeUtils;
+import org.protege.editor.owl.ui.lang.LangCodeEditor;
+import org.protege.editor.owl.ui.lang.LangCodeRenderer;
 import org.protege.editor.owl.ui.list.OWLEntityListPanel;
 import org.protege.editor.owl.ui.renderer.OWLCellRendererSimple;
 import org.protege.editor.owl.ui.selector.*;
 import org.semanticweb.owlapi.model.*;
+import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -285,15 +292,50 @@ public class UIHelper {
         return c;
     }
 
+    public JComboBox<LangCode> getLangCodeSelector() {
+        LangCodeRegistry registry = LangCodeRegistry.get();
+        JComboBox<LangCode> comboBox = new JComboBox<>();
+        comboBox.setSelectedItem(null);
+        comboBox.setEditable(true);
+        ImmutableList<LangCode> langCodes = registry.getLangCodes();
+        List<LangCode> langCodeList = new ArrayList<>(langCodes);
+        langCodeList.add(0, null);
+        comboBox.setModel(new DefaultComboBoxModel(
+                langCodeList.toArray()));
+        comboBox.setEditor(new LangCodeEditor(registry));
+        comboBox.setRenderer(new LangCodeRenderer());
+        return comboBox;
+    }
+
 
     public JComboBox<OWLDatatype> getDatatypeSelector() {
-        final OWLModelManager mngr = getOWLModelManager();
-        List<OWLDatatype> datatypeList = new ArrayList<>(new OWLDataTypeUtils(mngr.getOWLOntologyManager()).getKnownDatatypes(mngr.getActiveOntologies()));
+        OWLModelManager mngr = getOWLModelManager();
+        OWLDataFactory dataFactory = mngr.getOWLDataFactory();
+        Set<OWLDatatype> datatypes = new OWLDataTypeUtils(mngr.getOWLOntologyManager()).getKnownDatatypes(mngr.getActiveOntologies());
 
-        Collections.sort(datatypeList, mngr.getOWLObjectComparator());
+
+        OWLDatatype decimal = OWL2Datatype.XSD_DECIMAL.getDatatype(dataFactory);
+        datatypes.remove(decimal);
+        OWLDatatype integer = OWL2Datatype.XSD_INTEGER.getDatatype(dataFactory);
+        datatypes.remove(integer);
+        OWLDatatype string = OWL2Datatype.XSD_STRING.getDatatype(dataFactory);
+        datatypes.remove(string);
+        OWLDatatype bool = OWL2Datatype.XSD_BOOLEAN.getDatatype(dataFactory);
+        datatypes.remove(bool);
+        OWLDatatype datetime = OWL2Datatype.XSD_DATE_TIME.getDatatype(dataFactory);
+        datatypes.remove(datetime);
+
+        List<OWLDatatype> datatypeList = new ArrayList<>(datatypes);
+        datatypeList.sort(mngr.getOWLObjectComparator());
+        datatypeList.add(0, null);
+        datatypeList.add(0, bool);
+        datatypeList.add(0, datetime);
+        datatypeList.add(0, integer);
+        datatypeList.add(0, string);
+        datatypeList.add(0, decimal);
         datatypeList.add(0, null);
 
-        JComboBox<OWLDatatype> c = new JComboBox<>(new DefaultComboBoxModel<>(datatypeList.toArray(new OWLDatatype [datatypeList.size()])));
+        JComboBox<OWLDatatype> c = new JComboBox<>(new DefaultComboBoxModel<>(datatypeList.toArray(new OWLDatatype[0])));
         c.setPreferredSize(new Dimension(120, c.getPreferredSize().height));
         c.setRenderer(new OWLCellRendererSimple(owlEditorKit));
         return c;

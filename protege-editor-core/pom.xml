@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>edu.stanford.protege</groupId>
 		<artifactId>protege-parent</artifactId>
-		<version>5.2.1-SNAPSHOT</version>
+		<version>5.6.0-beta-1-SNAPSHOT</version>
 		<relativePath>../</relativePath>
 	</parent>
 	
@@ -41,6 +41,25 @@
 			<groupId>com.jgoodies</groupId>
 			<artifactId>jgoodies-common</artifactId>
 			<version>1.6.0</version>
+			<scope>provided</scope>
+		</dependency>
+
+
+		<dependency>
+			<groupId>com.google.auto.value</groupId>
+			<artifactId>auto-value-annotations</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.auto.value</groupId>
+			<artifactId>auto-value</artifactId>
+		</dependency>
+
+
+		<dependency>
+			<groupId>net.sf.trove4j</groupId>
+			<artifactId>core</artifactId>
+			<version>3.1.0</version>
 			<scope>provided</scope>
 		</dependency>
 
@@ -82,6 +101,7 @@
 							!com.jgoodies.looks.plastic.icons.*,
 							org.coode.mdock.*,
 							com.jgoodies.*,
+							gnu.trove.*
 						</_exportcontents>
 						<Import-Package>
 							!com.sun.*,

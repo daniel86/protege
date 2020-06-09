@@ -54,12 +54,12 @@ public class FolderGroupPanel extends NewEntryPanel {
         physicalLocationPanel.add(browse);
         centerPanel.add(physicalLocationPanel);
         
-        recursive = new JCheckBox("Recursively search subdirectories");
-        recursive.setAlignmentX(CENTER_ALIGNMENT);
+        recursive = new JCheckBox("Search all sub-folders");
+        recursive.setAlignmentX(LEFT_ALIGNMENT);
         centerPanel.add(recursive);
         centerPanel.add(Box.createVerticalGlue());
         importByName = new JCheckBox("Import By Name (requires manual updates)");
-        importByName.setAlignmentX(CENTER_ALIGNMENT);
+        importByName.setAlignmentX(LEFT_ALIGNMENT);
         centerPanel.add(importByName);
         centerPanel.add(Box.createVerticalGlue());
         return centerPanel;
@@ -75,7 +75,8 @@ public class FolderGroupPanel extends NewEntryPanel {
             return null;
         }
         try {
-        	URI folderUri = CatalogUtilities.relativize(new File(physicalLocationField.getText()).toURI(), catalog);
+            // There seems to be a bug in relativize and resolve so don't relativize here
+        	URI folderUri = new File(physicalLocationField.getText()).toURI();
         	if (importByName.isSelected()) {
         		return ImportByNameManager.createGroupEntry(folderUri, recursive.isSelected(), true, catalog);
         	}

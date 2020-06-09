@@ -30,13 +30,13 @@ public class ReasonerUtilities {
 		case NO_REASONER_FACTORY_CHOSEN:
             JOptionPane.showMessageDialog(owner,
                     "No reasoner has been selected and initialized so inference cannot proceed. Select a reasoner from the Reasoner menu.",
-                    "Reasoner not initialized.",
+                    "Reasoner not initialized",
                     JOptionPane.WARNING_MESSAGE);
             break;
 		case REASONER_NOT_INITIALIZED:
             JOptionPane.showMessageDialog(owner,
                     "No reasoner has been initialized so inference cannot proceed.  Go to the reasoner menu and select Start reasoner",
-                    "Reasoner not initialized.",
+                    "Reasoner not initialized",
                     JOptionPane.WARNING_MESSAGE);
             break;
 		case OUT_OF_SYNC:
@@ -47,8 +47,8 @@ public class ReasonerUtilities {
             break;
 		case INITIALIZATION_IN_PROGRESS:
             JOptionPane.showMessageDialog(owner,
-                    "Reasoner still intializing.  Wait for initialization to complete.",
-                    "Reasoner initializing.",
+                    "Reasoner still initializing.  Wait for initialization to complete.",
+                    "Reasoner initializing",
                     JOptionPane.WARNING_MESSAGE);
             break;
 		case INITIALIZED:

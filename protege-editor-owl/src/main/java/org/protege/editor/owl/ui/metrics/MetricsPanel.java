@@ -4,6 +4,8 @@ import org.protege.editor.core.Disposable;
 import org.protege.editor.core.Fonts;
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.model.OWLModelManager;
+import org.protege.editor.owl.model.event.OWLModelManagerChangeEvent;
+import org.protege.editor.owl.model.event.OWLModelManagerListener;
 import org.protege.editor.owl.ui.OWLAxiomTypeFramePanel;
 import org.semanticweb.owlapi.metrics.*;
 import org.semanticweb.owlapi.model.AxiomType;
@@ -42,6 +44,8 @@ public class MetricsPanel extends JPanel implements Disposable {
 
     private final OWLOntologyChangeListener ontologyChangeListener = changes -> invalidateMetrics();
 
+    private final OWLModelManagerListener owlModelManagerListener = event -> invalidateMetrics();
+
     private OWLEditorKit owlEditorKit;
 
     private final JPopupMenu popupMenu = new JPopupMenu();
@@ -54,12 +58,15 @@ public class MetricsPanel extends JPanel implements Disposable {
         setOpaque(true);
         initialiseOWLView();
         createPopupMenu();
-        editorKit.getOWLModelManager().addOntologyChangeListener(ontologyChangeListener);
+        OWLModelManager modelManager = editorKit.getOWLModelManager();
+        modelManager.addOntologyChangeListener(ontologyChangeListener);
+        modelManager.addListener(owlModelManagerListener);
     }
 
     @Override
     public void dispose() throws Exception {
         owlEditorKit.getOWLModelManager().removeOntologyChangeListener(ontologyChangeListener);
+        getOWLModelManager().removeListener(owlModelManagerListener);
     }
 
     private void invalidateMetrics() {
@@ -81,10 +88,11 @@ public class MetricsPanel extends JPanel implements Disposable {
         panel.setPreferredSize(new Dimension(800, 300));
         JOptionPane op = new JOptionPane(panel, JOptionPane.PLAIN_MESSAGE, JOptionPane.OK_CANCEL_OPTION);
         JDialog dlg = op.createDialog(this, lastMetric.getName());
+        dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         dlg.setResizable(true);
         dlg.addWindowListener(new WindowAdapter() {
-
-            public void windowClosed(WindowEvent e) {
+            @Override
+            public void windowClosing(WindowEvent e) {
                 panel.dispose();
             }
         });
@@ -268,7 +276,8 @@ public class MetricsPanel extends JPanel implements Disposable {
         metrics.add(new ReferencedDataPropertyCount(getOntology()));
         metrics.add(new ReferencedIndividualCount(getOntology()));
         metrics.add(new ReferencedAnnotationPropertyCount(getOntology()));
-        metrics.add(new DLExpressivity(getOntology()));
+        // Temporarily removed due to a problem with upgrading the OWL API
+//        metrics.add(new DLExpressivityMetric(getOntology()));
     	/*
     	 * Degenericized to be compatible with changing OWLAPI interfaces
     	 */

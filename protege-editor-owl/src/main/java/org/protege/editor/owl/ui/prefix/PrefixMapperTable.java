@@ -2,6 +2,7 @@ package org.protege.editor.owl.ui.prefix;
 
 import org.protege.editor.owl.ui.table.BasicOWLTable;
 import org.semanticweb.owlapi.formats.PrefixDocumentFormat;
+import org.semanticweb.owlapi.vocab.Namespaces;
 
 import javax.swing.event.ChangeEvent;
 
@@ -18,8 +19,8 @@ import static org.protege.editor.owl.ui.prefix.PrefixMapperTableModel.Column;
  * www.cs.man.ac.uk/~horridgm<br><br>
  */
 public class PrefixMapperTable extends BasicOWLTable {
-	private static final long serialVersionUID = 7960180034430124925L;
-	private PrefixDocumentFormat prefixManager;
+
+	private final PrefixDocumentFormat prefixManager;
 
     public PrefixMapperTable(PrefixDocumentFormat prefixManager) {
         super(new PrefixMapperTableModel(prefixManager));
@@ -70,7 +71,7 @@ public class PrefixMapperTable extends BasicOWLTable {
             int newRow = getModel().getIndexOfPrefix(cellValue);
             
             if (newRow >= 0) {
-            	setRowSelectionInterval(newRow, newRow);                       
+            	setRowSelectionInterval(newRow, newRow);
             	editCellAt(newRow, Column.PREFIX.ordinal());
             	requestFocus();                                
             }

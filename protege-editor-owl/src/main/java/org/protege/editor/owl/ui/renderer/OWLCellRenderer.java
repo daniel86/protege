@@ -22,6 +22,7 @@ import java.util.List;
 
 import static java.awt.RenderingHints.KEY_ANTIALIASING;
 import static java.awt.RenderingHints.VALUE_ANTIALIAS_ON;
+import static org.protege.editor.owl.ui.renderer.RenderingEscapeUtils.RenderingEscapeSetting.UNESCAPED_RENDERING;
 
 
 /**
@@ -236,6 +237,7 @@ public class OWLCellRenderer implements TableCellRenderer, TreeCellRenderer, Lis
         highlightUnsatisfiableProperties = true;
         crossedOutEntities.clear();
         unsatisfiableNames.clear();
+        equivalentObjects.clear();
         boxedNames.clear();
     }
     
@@ -273,6 +275,8 @@ public class OWLCellRenderer implements TableCellRenderer, TreeCellRenderer, Lis
 		crossedOutEntities.addAll(tmp.crossedOutEntities);
 		unsatisfiableNames.clear();
 		unsatisfiableNames.addAll(tmp.unsatisfiableNames);
+		equivalentObjects.clear();
+		equivalentObjects.addAll(tmp.equivalentObjects);
 		boxedNames.clear();
 		boxedNames.addAll(tmp.boxedNames);
 	}
@@ -490,7 +494,7 @@ public class OWLCellRenderer implements TableCellRenderer, TreeCellRenderer, Lis
         }
         if (component instanceof LinkedObjectComponent && OWLRendererPreferences.getInstance().isRenderHyperlinks()) {
             linkedObjectComponent = (LinkedObjectComponent) component;
-            Point mouseLoc = component.getMousePosition(true);
+            Point mouseLoc = component.getMousePosition();
             if (mouseLoc == null) {
                 linkedObjectComponent.setLinkedObject(null);
                 return;
@@ -587,7 +591,7 @@ public class OWLCellRenderer implements TableCellRenderer, TreeCellRenderer, Lis
 
     protected String getRendering(Object object) {
         if (object instanceof OWLObject) {
-            String rendering = getOWLModelManager().getRendering(((OWLObject) object));
+            String rendering = getOWLModelManager().getDisabmiguatedRendering((OWLObject) object, UNESCAPED_RENDERING);
             for (OWLObject eqObj : equivalentObjects) {
                 // Add in the equivalent class symbol
                 rendering += " \u2261 " + getOWLModelManager().getRendering(eqObj);
@@ -681,11 +685,8 @@ public class OWLCellRenderer implements TableCellRenderer, TreeCellRenderer, Lis
             StyleConstants.setBold(s, true);
         }
         plainStyle = doc.addStyle("PLAIN_STYLE", null);
-//        StyleConstants.setForeground(plainStyle, Color.BLACK);
         StyleConstants.setItalic(plainStyle, false);
         StyleConstants.setSpaceAbove(plainStyle, 0);
-//        StyleConstants.setFontFamily(plainStyle, textPane.getFont().getFamily());
-
         boldStyle = doc.addStyle("BOLD_STYLE", null);
         StyleConstants.setBold(boldStyle, true);
 
